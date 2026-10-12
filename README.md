@@ -120,7 +120,9 @@ cmake --build . --target mysqld -j "$(nproc)"
 ```
 
 The same steps apply to `storage_eviction` and `storage_PURE` — just point
-step 2 at the matching folder. A minimal `my.cnf` needs at least:
+step 2 at the matching folder (steps 1-4 of `dockerimage/Dockerfile` do
+exactly this for `storage_fullpage` if you'd rather not do it by hand).
+A minimal `my.cnf` needs at least:
 
 ```ini
 [mysqld]
@@ -153,12 +155,41 @@ sysbench oltp_read_write \
 
 ### Crash-recovery scenario script
 
-`scripts/crash_microbench.sh` automates: start mysqld → run a sysbench
-microbenchmark under load → `kill -9` mid-run → restart → confirm the server
-comes back up and report how long recovery took from the error log. See the
-script for configurable paths (`MYSQLD_BIN`, `DEFAULTS_FILE`, `SOCK`) and
-timing (`WARMUP_SECS` before the kill).
+`scripts/crash_microbench.sh` automates a single-client example: start
+mysqld → prepare a `sbtest1` table via sysbench → one client repeatedly
+runs a fixed-length update (`UPDATE sbtest1 SET k = k + 1 WHERE id <
+10000`) → crash the server with `kill -SIGABRT $(pidof mysqld)` mid-update
+→ restart → report how long recovery took (from the signal to "ready for
+connections") and print the relevant OFR recovery log lines. Since every
+update is the same fixed-size INT column, this specifically exercises
+OFR's ASYNC delta path. See the script for configurable paths
+(`MYSQLD_BIN`, `DEFAULTS_FILE`, `SOCK`), the update range (`ID_CEILING`),
+and timing (`WARMUP_SECS` before the crash).
 
 ```bash
+MYSQLD_BIN=/path/to/build/bin/mysqld \
+DEFAULTS_FILE=/path/to/my.cnf \
+ERROR_LOG=/path/to/datadir/mysql_error.log \
 ./scripts/crash_microbench.sh
 ```
+
+### Docker image
+
+`dockerimage/` builds `storage_fullpage` end-to-end from vanilla MySQL
+8.0.24 inside a container, with sysbench and `scripts/crash_microbench.sh`
+already in place:
+
+```bash
+# from the repo root (needs storage_fullpage/ and scripts/ as build context)
+docker build -f dockerimage/Dockerfile -t ofr-fullpage .
+docker run -it --rm ofr-fullpage
+# inside the container:
+/scripts/crash_microbench.sh
+```
+
+There's no real NVDIMM/DAX inside a container, so `/mnt/pmem` is just a
+regular directory on the container's filesystem — the crash-recovery logic
+is unaffected, you just don't get real persistent-memory latency/durability.
+To use a real DAX device, bind-mount it: `docker run -v /mnt/pmem:/mnt/pmem
+-it --rm ofr-fullpage` on a host that has one set up (see the NVDIMM
+section above).
