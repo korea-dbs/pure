@@ -27,7 +27,10 @@ DB_NAME="${DB_NAME:-sbtest}"
 SB_TABLE_SIZE="${SB_TABLE_SIZE:-100000}"   # rows in sbtest1
 ID_CEILING="${ID_CEILING:-10000}"          # single client updates id < this
 WARMUP_SECS="${WARMUP_SECS:-15}"           # how long the update loop runs before the crash
-READY_MARKER="ready for connections"
+READY_MARKER=": ready for connections"  # the main "mysqld: ready for..." line,
+                                          # not the earlier "X Plugin ready for
+                                          # connections" one (no socket to
+                                          # connect to yet at that point)
 # ------------------------------------------------------------------------
 
 mysql_cli() { mysql -S "$SOCK" -u"$DB_USER" -p"$DB_PASS" "$@" 2>&1 | grep -v Warning; }

@@ -943,10 +943,13 @@ bool ofr_recover(const std::string &data_dir) {
           use_uring ? "io_uring (M+A)" : "sync pread (M)");
 
   for (unsigned i = 0; i < n_threads; ++i) {
-    if (use_uring)
+#ifdef HAVE_LIBURING
+    if (use_uring) {
       workers.emplace_back(ofr_worker_uring, &ctx);
-    else
-      workers.emplace_back(ofr_worker_plain, &ctx);
+      continue;
+    }
+#endif
+    workers.emplace_back(ofr_worker_plain, &ctx);
   }
 
   for (auto &t : workers) t.join();

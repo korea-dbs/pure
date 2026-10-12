@@ -16,16 +16,25 @@
 # /mnt/pmem with `docker run -v /mnt/pmem:/mnt/pmem ...` on a host that has
 # one set up (see the top-level README's NVDIMM section).
 
-FROM ubuntu:22.04
+# NOTE: must be 20.04, not 22.04+ -- MySQL 8.0.24's cmake/ssl.cmake can't
+# parse the OpenSSL 3.0 version headers Ubuntu 22.04 ships (OPENSSL_MAJOR/
+# MINOR/FIX_VERSION come back empty and the configure step fails). 20.04
+# ships OpenSSL 1.1.1, which this MySQL version expects.
+FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake bison pkg-config git wget ca-certificates \
         libssl-dev libncurses5-dev zlib1g-dev libnuma-dev libaio-dev \
-        libudev-dev libtirpc-dev liburing-dev \
+        libudev-dev libtirpc-dev \
         python3 perl bc procps \
         mysql-client sysbench \
+    && rm -rf /var/lib/apt/lists/*
+
+# liburing-dev isn't in every Ubuntu 20.04 mirror -- best-effort install;
+# opt_for_recovery.cc falls back to plain pread/pwrite if it's missing.
+RUN apt-get update && (apt-get install -y --no-install-recommends liburing-dev || true) \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
