@@ -1,4 +1,4 @@
-# pure
+# PURE
 
 OFR(Optimized Full-page Recovery) InnoDB storage engine variants. Each top-level
 folder contains only the modified `storage/innobase` tree — drop it into a
